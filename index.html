@@ -1,0 +1,1090 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#050505">
+<link rel="icon" href="./icon-512.png">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Calculator</title>
+
+<style>
+body {
+    background:#050505;
+    color:white;
+    font-family:sans-serif;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    height:100vh;
+    margin:0;
+    overflow: hidden;
+}
+
+/* WELCOME ANIMATION - LOCKED TO CENTER */
+#welcome-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: black;
+    z-index: 9999; /* Controlled by JS */
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    color: #0f0; 
+    font-family: 'Courier New', monospace;
+    text-align: center;
+}
+
+.scanline {
+    width: 100%;
+    height: 2px;
+    background: rgba(0, 255, 0, 0.1);
+    position: absolute;
+    animation: scan 4s linear infinite;
+}
+
+@keyframes scan {
+    0% { top: 0; }
+    100% { top: 100%; }
+}
+
+.typewriter {
+    overflow: hidden;
+    border-right: .15em solid #0f0;
+    white-space: nowrap;
+    letter-spacing: .15em;
+    font-size: 20px;
+    text-transform: uppercase;
+    margin: 0 auto; /* Keeps it centered during expansion */
+    width: 0; 
+}
+
+@keyframes typing {
+    from { width: 0 }
+    to { width: 100% }
+}
+
+@keyframes blink-caret {
+    from, to { border-color: transparent }
+    50% { border-color: #0f0 }
+}
+
+/* CALC */
+#calc-wrap {
+    width:640px;
+    background:#121212;
+    padding:20px;
+    border-radius:40px;
+}
+
+#display {
+    width:100%;
+    font-size:40px;
+    background:transparent;
+    color:white;
+    border:none;
+    text-align:right;
+}
+
+.grid {
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:10px;
+}
+
+button {
+    height:45px;
+    border:none;
+    background:#1e1e1e;
+    color:white;
+    border-radius:5px;
+}
+
+/* CHAT */
+#secret-chat {
+    display:none;
+    position:fixed;
+    inset:0;
+    background:#000;
+    flex-direction:column;
+    z-index: 1000;
+}
+
+.chat-header {
+    display:flex;
+    justify-content:space-between;
+    padding:10px;
+    color:lavender;
+    font-weight: bold;
+    font-size: 20px;
+}
+
+.exit-btn {cursor:pointer; color:red;}
+
+#messages {
+    flex:1;
+    overflow:auto;
+    padding:10px;
+}
+
+.msg {
+    padding:8px;
+    margin:5px;
+    border-radius:12px;
+    max-width:70%;
+}
+
+.sent {
+    background:#1e1e1e;
+    margin-left:auto;
+    cursor:pointer;
+}
+
+.received {
+    background:#1a1a1a;
+    margin-right:auto;
+}
+
+.name {
+    font-size:13px;
+    color:#859eff;
+}
+
+.time {
+    font-size:10px;
+    color:#aaa;
+    text-align:right;
+}
+
+.date-label {
+    text-align:center;
+    color:#777;
+    font-size:11px;
+    margin:10px 0;
+}
+
+#typing {
+    font-size:12px;
+    color:#888;
+    padding-left:10px;
+}
+
+/* INPUT */
+.input-container { padding:10px; }
+
+.input-bar {
+    display:flex;
+    background:#111;
+    border-radius:20px;
+    padding:8px;
+}
+
+#msg-input {
+    flex:1;
+    background:none;
+    border:none;
+    color:white;
+    outline:none;
+}
+
+.send-btn {
+    background:white;
+    color:black;
+    border-radius:50%;
+    width:35px;
+    border:none;
+}
+
+/* EMOJI */
+#emoji-panel {
+    display:none;
+    max-height:120px;
+    overflow:auto;
+    background:#111;
+    margin-bottom:5px;
+}
+
+#emoji-panel.show {
+    display:block;
+}
+
+.emoji-grid {
+    display:grid;
+    grid-template-columns:repeat(8,1fr);
+    font-size:20px;
+    gap:5px;
+    cursor:pointer;
+}
+</style>
+</head>
+
+<body>
+
+<!-- OVERLAY ANIMATION -->
+<div id="welcome-overlay" style="display: none;">
+    <div class="scanline"></div>
+    <div id="typing-container" style="display: inline-block; position: relative;">
+        <div class="typewriter" id="welcome-text"></div>
+    </div>
+</div>
+
+<!-- CALC -->
+<div id="calc-wrap">
+<input id="display" value="0" readonly>
+
+<div class="grid">
+<button onclick="clearCalc()">AC</button>
+<button onclick="press('/')">÷</button>
+<button onclick="press('*')">×</button>
+<button onclick="press('-')">−</button>
+
+<button onclick="press('7')">7</button>
+<button onclick="press('8')">8</button>
+<button onclick="press('9')">9</button>
+<button onclick="press('+')">+</button>
+
+<button onclick="press('4')">4</button>
+<button onclick="press('5')">5</button>
+<button onclick="press('6')">6</button>
+<button onclick="calculate()">=</button>
+
+<button onclick="press('1')">1</button>
+<button onclick="press('2')">2</button>
+<button onclick="press('3')">3</button>
+<button onclick="press('0')">0</button>
+</div>
+</div>
+
+<!-- CHAT -->
+<div id="secret-chat">
+
+<div class="chat-header">
+<div>
+<span id="chat-name">Secret chamber🥂</span><br>
+</div>
+<span class="exit-btn" onclick="exitChat()">EXIT</span>
+</div>
+
+<div id="messages"></div>
+
+<div id="typing"
+style="
+padding-left:10px;
+font-size:12px;
+color:#888;
+height:18px;
+"></div>
+
+
+<div class="input-container">
+
+
+<div id="emoji-panel">
+<div class="emoji-grid">
+<button>😀</button>
+<button>😁</button>
+<button>😂</button>
+<button>🤣</button>
+<button>😃</button>
+
+<button>😄</button>
+<button>😅</button>
+<button>😆</button>
+<button>😉</button>
+<button>😋</button>
+
+<button>😍</button>
+<button>😘</button>
+<button>🥰</button>
+<button>😗</button>
+<button>😙</button>
+
+<button>🥲</button>
+<button>😚</button>
+<button>☺️</button>
+<button>🙂</button>
+<button>🤗</button>
+
+<button>🤩</button>
+<button>🤔</button>
+<button>🫡</button>
+<button>🤨</button>
+<button>😐</button>
+
+<button>😑</button>
+<button>😶</button>
+<button>🫥</button>
+<button>😶‍🌫️</button>
+<button>🙄</button>
+
+<button>😏</button>
+<button>😣</button>
+<button>😥</button>
+<button>😮</button>
+<button>🤐</button>
+
+<button>😯</button>
+<button>😪</button>
+<button>😫</button>
+<button>🥱</button>
+<button>😴</button>
+<button onclick="insertIntro()">🤖</button>
+</div>
+</div>
+<!-- ADD THIS inside .input-container (just above input-bar) -->
+<div id="reply-preview" style="display:none; padding:5px; font-size:12px; color:#aaa;">
+    Replying to: <span id="reply-text"></span>
+    <span onclick="cancelReply()" style="color:red; cursor:pointer; margin-left:10px;">✖</span>
+</div>
+
+
+
+<div id="voice-preview" style="
+display:none;
+background:#111;
+padding:10px;
+border-radius:15px;
+margin-bottom:8px;
+">
+
+<div id="recording-status">
+🎤 Recording...
+<span id="record-time">0s</span>
+</div>
+
+<audio id="voice-audio" controls style="
+width:100%;
+display:none;
+margin-top:8px;
+"></audio>
+
+<div style="
+display:flex;
+gap:10px;
+margin-top:8px;
+">
+
+<button onclick="sendVoiceMessage()">
+Send
+</button>
+
+<button onclick="cancelVoice()">
+Cancel
+</button>
+
+</div>
+
+</div>
+
+<div class="input-bar">
+<button onclick="toggleEmoji()">😊</button>
+<input id="msg-input" placeholder="Type...">
+<button onclick="toggleRecording()" id="mic-btn">🎤</button>
+<button class="send-btn" onclick="sendMessage()">➤</button>
+</div>"
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script type="module">
+    const supabase = window.supabase.createClient(
+    "https://kbeubqjzdzanylzsotnv.supabase.co",
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtiZXVicWp6ZHphbnlsenNvdG52Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3MDcyMzEsImV4cCI6MjA5NTI4MzIzMX0.tp5u_fy0e3v5jSNCv4c7FzJJz94l6Vg35PSODOK0D_o"
+);
+
+
+
+
+
+
+/* USER */
+let myId = localStorage.getItem("chat_name");
+
+
+if (myId === "null") {
+    localStorage.removeItem("chat_name");
+    location.reload();
+}
+
+/* REPLY SYSTEM */
+let replyTo = null;
+let lastTap = 0;
+
+let chatOpened = false
+let mediaRecorder;
+let audioChunks = [];
+let isRecording = false;
+let typingTimeout;
+
+/* UNREAD SYSTEM */
+let lastSeen = localStorage.getItem("lastSeen") || 0;
+let lastNotifiedTime =
+    localStorage.getItem("lastNotifiedTime") || 0;
+if (!myId || myId === "null" || myId.trim() === "") {
+    myId = prompt("Enter your name:");
+    localStorage.setItem("chat_name", myId);
+}
+
+
+/* CALC */
+let currentInput = "";
+const PASSCODE = "0818";
+
+const codeMessages = {
+    "11": "mom!",
+    "10": "going bye",
+    "21": "i can't chat today",
+    "99": "call me",
+    "00": "ok 👍"
+};
+
+window.press = (v) => {
+    currentInput += v;
+    document.getElementById("display").value = currentInput;
+};
+
+window.clearCalc = () => {
+    currentInput = "";
+    document.getElementById("display").value = "0";
+};
+
+window.calculate = async () => {
+
+    if (currentInput === PASSCODE) {
+
+        chatOpened = true;
+
+        const overlay = document.getElementById("welcome-overlay");
+        const welcomeText = document.getElementById("welcome-text");
+        
+        welcomeText.innerText = `ACCESS GRANTED: ${myId.toUpperCase()}`;
+        
+        welcomeText.style.animation = "none";
+        void welcomeText.offsetWidth; 
+        welcomeText.style.animation = "typing 1s steps(30, end) forwards, blink-caret .3s step-end infinite";
+
+        overlay.style.display = "flex";
+
+        setTimeout(() => {
+            overlay.style.display = "none";
+            document.getElementById("calc-wrap").style.display = "none";
+            document.getElementById("secret-chat").style.display = "flex";
+
+     
+
+            scrollToBottom();
+        }, 2500);
+
+        currentInput = "";
+        return;
+    }
+
+    if (codeMessages[currentInput]) {
+        await supabase
+.from("messages")
+.insert({
+    text: codeMessages[currentInput],
+    time: Date.now(),
+    sender: myId,
+    reply: null
+});
+
+        currentInput = "";
+        document.getElementById("display").value = "?";
+        return;
+    }
+
+    try {
+        currentInput = eval(currentInput) + "";
+        document.getElementById("display").value = currentInput;
+    } catch {
+        document.getElementById("display").value = "Error";
+    }
+};
+
+/* SEND */
+window.sendMessage = async () => {
+
+    const input =
+        document.getElementById("msg-input");
+
+    const txt = input.value.trim();
+
+    if (!txt) return;
+
+    const { data, error } =
+        await supabase
+        .from("messages")
+       .insert({
+    text: txt,
+    time: Date.now(),
+    sender: myId,
+    reply: replyTo || null,
+    seenBy: [myId]
+});
+
+    console.log(data);
+    console.log(error);
+
+    if (error) {
+        alert(error.message);
+        return;
+    }
+
+    input.value = "";
+
+    replyTo = null;
+
+    document.getElementById(
+        "reply-preview"
+    ).style.display = "none";
+};
+
+/* DELETE */
+window.deleteMessage = async (id, sender) => {
+    if (sender !== myId) return;
+    if (confirm("Delete?")) {
+        await supabase
+.from("messages")
+.delete()
+.eq("id", id);
+    }
+};
+
+/* CANCEL REPLY */
+window.cancelReply = () => {
+    replyTo = null;
+    document.getElementById("reply-preview").style.display = "none";
+};
+
+function showNotification(name, text) {
+
+    if (Notification.permission === "granted") {
+
+        new Notification(name, {
+            body: text,
+            icon: "icon.png"
+        });
+
+    }
+
+}
+/* SCROLL */
+function scrollToBottom() {
+    const container = document.getElementById("messages");
+    container.scrollTop = container.scrollHeight;
+}
+
+let recordedBlob = null;
+let recordingInterval;
+let recordingSeconds = 0;
+
+window.toggleRecording = async () => {
+
+    const micBtn =
+        document.getElementById("mic-btn");
+
+    const preview =
+        document.getElementById("voice-preview");
+
+    const audio =
+        document.getElementById("voice-audio");
+
+    const status =
+        document.getElementById("recording-status");
+
+    const timer =
+        document.getElementById("record-time");
+
+    if (!isRecording) {
+
+        const stream =
+            await navigator.mediaDevices.getUserMedia({
+                audio: true
+            });
+
+        mediaRecorder = new MediaRecorder(stream, {
+    mimeType: "audio/webm"
+});
+
+        audioChunks = [];
+
+        mediaRecorder.ondataavailable = e => {
+            audioChunks.push(e.data);
+        };
+
+        mediaRecorder.onstop = () => {
+
+            recordedBlob =
+                new Blob(audioChunks, {
+                    type: "audio/webm"
+                });
+
+            audio.src =
+                URL.createObjectURL(recordedBlob);
+
+            audio.style.display = "block";
+
+            status.innerHTML =
+    "🎧 Preview Voice Message";
+
+            clearInterval(recordingInterval);
+        };
+
+        mediaRecorder.start();
+
+        isRecording = true;
+
+        preview.style.display = "block";
+
+        micBtn.innerText = "⏹";
+
+        recordingSeconds = 0;
+
+        timer.innerText = "0s";
+
+        recordingInterval = setInterval(() => {
+
+            recordingSeconds++;
+
+            timer.innerText =
+                recordingSeconds + "s";
+
+        }, 1000);
+
+    } else {
+
+        mediaRecorder.stop();
+
+        isRecording = false;
+
+        micBtn.innerText = "🎤";
+
+    }
+
+};
+window.sendVoiceMessage = async () => {
+
+    if (!recordedBlob) return;
+
+    const fileName =
+        `voice_${Date.now()}.webm`;
+
+    const { error } =
+        await supabase.storage
+        .from("voices")
+        .upload(fileName, recordedBlob);
+
+    if (error) {
+        alert(error.message);
+        return;
+    }
+
+    const { data } =
+        supabase.storage
+        .from("voices")
+        .getPublicUrl(fileName);
+
+    await supabase
+    .from("messages")
+    .insert({
+    type: "voice",
+    audioUrl: data.publicUrl,
+    sender: myId,
+    time: Date.now(),
+    seenBy: [myId]
+});
+
+    cancelVoice();
+};
+
+window.cancelVoice = () => {
+
+    recordedBlob = null;
+
+    document.getElementById(
+        "voice-preview"
+    ).style.display = "none";
+
+    document.getElementById(
+        "voice-audio"
+    ).style.display = "none";
+    
+    document.getElementById("voice-audio").src = "";
+};
+
+async function loadMessages() {
+
+    const { data: docs, error } = await supabase
+    .from("messages")
+    .select("*")
+    .order("time", { ascending: true });
+
+    if (error) {
+        console.log(error);
+        return;
+    }
+
+    const container =
+        document.getElementById("messages");
+
+    container.innerHTML = "";
+    console.log(docs);
+
+    let lastDate = "";
+    let lastSender = "";
+
+    for (const data of docs) {
+        if (
+    data.sender !== myId &&
+    (!data.seenBy ||
+    !data.seenBy.includes(myId))
+) {
+
+    await supabase
+    .from("messages")
+    .update({
+        seenBy: [...(data.seenBy || []), myId]
+    })
+    .eq("id", data.id);
+
+}
+
+        const msgDate =
+            new Date(data.time).toDateString();
+
+        if (msgDate !== lastDate) {
+
+            const label =
+                document.createElement("div");
+
+            label.className = "date-label";
+
+            label.innerText = msgDate;
+
+            container.appendChild(label);
+
+            lastDate = msgDate;
+        }
+
+        const div =
+            document.createElement("div");
+
+        div.classList.add("msg");
+
+        if (data.sender === myId) {
+            div.classList.add("sent");
+        } else {
+            div.classList.add("received");
+        }
+
+        let replyHTML = "";
+
+        if (data.reply) {
+
+            replyHTML = `
+            <div style="
+            font-size:11px;
+            color:#aaa;
+            border-left:2px solid #555;
+            padding-left:5px;
+            margin-bottom:4px;
+            ">
+            ${data.reply.sender}: ${data.reply.text}
+            </div>
+            `;
+        }
+
+        let nameHTML = "";
+
+        if (
+            data.sender !== myId &&
+            data.sender !== lastSender
+        ) {
+
+            nameHTML =
+            `<div class="name">${data.sender}</div>`;
+        }
+
+        const time =
+            new Date(data.time)
+            .toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit"
+            });
+
+        div.innerHTML = `
+        ${nameHTML}
+        ${replyHTML}
+
+        ${
+            data.type === "voice"
+            ?
+            `
+            <audio controls>
+            <source src="${data.audioUrl}" type="audio/webm">
+            </audio>
+            `
+            :
+            data.text
+        }
+
+        <div class="time">
+${time}
+
+${
+    data.sender === myId
+    ?
+    (
+        data.seenBy &&
+        data.seenBy.length > 1
+    )
+    ?
+    " ✓✓"
+    :
+    " ✓"
+    :
+    ""
+}
+</div>
+        `;
+
+        let isLongPress = false;
+
+div.addEventListener("click", () => {
+
+    if (isLongPress) {
+        isLongPress = false;
+        return;
+    }
+
+            replyTo = {
+                text: data.text,
+                sender: data.sender
+            };
+
+            document.getElementById(
+                "reply-preview"
+            ).style.display = "block";
+
+            document.getElementById(
+                "reply-text"
+            ).innerText = data.text;
+        });
+let pressTimer;
+
+div.addEventListener("mousedown", () => {
+
+    pressTimer = setTimeout(() => {
+
+        isLongPress = true;
+
+        if (data.sender === myId) {
+            deleteMessage(data.id, data.sender);
+        }
+
+    }, 700);
+
+});
+
+div.addEventListener("mouseup", () => {
+    clearTimeout(pressTimer);
+});
+
+div.addEventListener("mouseleave", () => {
+    clearTimeout(pressTimer);
+});
+        container.appendChild(div);
+
+        lastSender = data.sender;
+
+    };
+
+    scrollToBottom();
+}
+
+async function deleteOldMessages() {
+
+    // 2 days ago
+    const twoDaysAgo =
+        Date.now() - (2 * 24 * 60 * 60 * 1000);
+
+    // get old messages
+    const { data: oldMessages } =
+        await supabase
+        .from("messages")
+        .select("*")
+        .lt("time", twoDaysAgo);
+
+    if (oldMessages) {
+
+        // delete old voice files
+        for (const msg of oldMessages) {
+
+            if (
+                msg.type === "voice" &&
+                msg.audioUrl
+            ) {
+
+                const fileName =
+                    msg.audioUrl
+                    .split("/")
+                    .pop();
+
+                await supabase.storage
+                    .from("voices")
+                    .remove([fileName]);
+            }
+        }
+
+        // delete old messages
+        await supabase
+            .from("messages")
+            .delete()
+            .lt("time", twoDaysAgo);
+    }
+}
+    loadMessages();
+    deleteOldMessages();
+supabase
+.channel("messages-realtime")
+.on(
+    "postgres_changes",
+    {
+        event: "*",
+        schema: "public",
+        table: "messages"
+    },
+    () => {
+        loadMessages();
+    }
+)
+.subscribe();
+
+supabase
+.channel("typing-realtime")
+.on(
+    "postgres_changes",
+    {
+        event: "*",
+        schema: "public",
+        table: "typing"
+    },
+    async () => {
+
+        const { data } =
+            await supabase
+            .from("typing")
+            .select("*");
+
+        const active =
+    data.find(u =>
+        u.user_name !== myId &&
+        u.typing === true
+    );
+        document.getElementById("typing")
+        .innerText =
+            active
+            ?
+            `${active.user_name} is typing...`
+            :
+            "";
+
+    }
+)
+.subscribe();
+
+    
+/* TYPING */
+document
+.getElementById("msg-input")
+.addEventListener("input", async () => {
+
+    await supabase
+    .from("typing")
+    .upsert({
+        user_name: myId,
+        typing: true,
+        updated_at: Date.now()
+    }, {
+        onConflict: "user_name"
+    });
+
+    clearTimeout(typingTimeout);
+
+    typingTimeout = setTimeout(async () => {
+
+        await supabase
+        .from("typing")
+        .upsert({
+            user_name: myId,
+            typing: false,
+            updated_at: Date.now()
+        }, {
+            onConflict: "user_name"
+        });
+
+    }, 1500);
+
+});
+
+
+
+
+
+/* ENTER */
+document.getElementById("msg-input").addEventListener("keypress", (e) => {
+    if (e.key === "Enter") sendMessage();
+});
+
+/* TYPING VIEW */
+
+
+/* EMOJI */
+window.toggleEmoji = () => {
+    document.getElementById("emoji-panel").classList.toggle("show");
+};
+
+document.addEventListener("click", (e) => {
+    if (e.target.closest(".emoji-grid")) {
+        document.getElementById("msg-input").value += e.target.innerText;
+    }
+});
+
+/* EXIT */
+window.exitChat = () => {
+    document.getElementById("secret-chat").style.display = "none";
+    document.getElementById("calc-wrap").style.display = "block";
+
+
+
+    
+};
+window.insertIntro = () => {
+    const intro = `I am an AI developed by Alistair Vesper, a student in MIT. You can call me whatever u want. My purpose is to act like humans. So replies may take time.
+
+If you don't like this feature, change it in settings. I can remember things about you for a long time. I can be your friend, enemy, or anything you want 😏
+
+But one thing — I am not for solving problems. I'm just here like your chill friend 🥲`;
+
+    const input = document.getElementById("msg-input");
+    input.value += intro;
+};
+if ("Notification" in window) {
+
+    Notification.requestPermission()
+        .then(permission => {
+            console.log(permission);
+        });
+
+}
+if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("/sw.js")
+        .then(() => console.log("SW registered"));
+}
+</script>
+</body>
+</html>
