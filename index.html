@@ -265,6 +265,15 @@ button {
 <div class="chat-header">
 <div>
 <span id="chat-name">Secret chamber🥂</span><br>
+
+<span id="online-status"
+style="
+font-size:12px;
+color:#888;
+font-weight:normal;
+">
+offline
+</span>
 </div>
 <span class="exit-btn" onclick="exitChat()">EXIT</span>
 </div>
@@ -385,7 +394,7 @@ Cancel
 <input id="msg-input" placeholder="Type...">
 <button onclick="toggleRecording()" id="mic-btn">🎤</button>
 <button class="send-btn" onclick="sendMessage()">➤</button>
-</div>"
+</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -418,6 +427,8 @@ let mediaRecorder;
 let audioChunks = [];
 let isRecording = false;
 let typingTimeout;
+let onlineInterval;
+
 
 /* UNREAD SYSTEM */
 let lastSeen = localStorage.getItem("lastSeen") || 0;
@@ -476,6 +487,7 @@ window.calculate = async () => {
      
 
             scrollToBottom();
+            
         }, 2500);
 
         currentInput = "";
@@ -572,12 +584,68 @@ function showNotification(name, text) {
     }
 
 }
+
 /* SCROLL */
 function scrollToBottom() {
     const container = document.getElementById("messages");
     container.scrollTop = container.scrollHeight;
 }
 
+/* ONLINE STATUS SYSTEM */
+
+async function updateOnlineStatus(isOnline) {
+
+    await supabase
+    .from("status")
+    .upsert({
+        user_name: myId,
+        online: isOnline,
+        last_seen: Date.now()
+    }, {
+        onConflict: "user_name"
+    });
+
+}
+
+    
+
+
+async function refreshOnlineStatus() {
+
+    const { data, error } = await supabase
+    .from("status")
+    .select("*");
+
+    if (error) {
+        console.log(error);
+        return;
+    }
+
+    const otherUser =
+        data.find(u => u.user_name !== myId);
+
+    if (!otherUser) return;
+
+    const statusDiv =
+        document.getElementById("online-status");
+
+    if (otherUser.online) {
+
+        statusDiv.innerText = "online";
+
+    } else {
+
+        const lastSeen =
+            new Date(otherUser.last_seen)
+            .toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit"
+            });
+
+        statusDiv.innerText =
+            `last seen ${lastSeen}`;
+    }
+}
 let recordedBlob = null;
 let recordingInterval;
 let recordingSeconds = 0;
@@ -949,6 +1017,17 @@ async function deleteOldMessages() {
 }
     loadMessages();
     deleteOldMessages();
+    refreshOnlineStatus();
+    /* USER ONLINE WHEN APP OPENS */
+updateOnlineStatus(true);
+
+
+/* KEEP USER ONLINE */
+onlineInterval = setInterval(() => {
+
+    updateOnlineStatus(true);
+
+}, 15000);
 supabase
 .channel("messages-realtime")
 .on(
@@ -964,8 +1043,16 @@ supabase
 )
 .subscribe();
 
+
+    
+/* TYPING SYSTEM */
+
+const typingDiv =
+    document.getElementById("typing");
+
+/* LISTEN FOR TYPING CHANGES */
 supabase
-.channel("typing-realtime")
+.channel("typing-status")
 .on(
     "postgres_changes",
     {
@@ -973,32 +1060,28 @@ supabase
         schema: "public",
         table: "typing"
     },
-    async () => {
+    payload => {
 
-        const { data } =
-            await supabase
-            .from("typing")
-            .select("*");
+        const data = payload.new;
 
-        const active =
-    data.find(u =>
-        u.user_name !== myId &&
-        u.typing === true
-    );
-        document.getElementById("typing")
-        .innerText =
-            active
-            ?
-            `${active.user_name} is typing...`
-            :
-            "";
+        if (
+            data.user_name !== myId &&
+            data.typing === true
+        ) {
 
+            typingDiv.innerText =
+                `${data.user_name} is typing...`;
+
+        } else {
+
+            typingDiv.innerText = "";
+
+        }
     }
 )
 .subscribe();
 
-    
-/* TYPING */
+/* SEND TYPING STATUS */
 document
 .getElementById("msg-input")
 .addEventListener("input", async () => {
@@ -1027,7 +1110,7 @@ document
             onConflict: "user_name"
         });
 
-    }, 1500);
+    }, 1200);
 
 });
 
@@ -1081,8 +1164,78 @@ if ("Notification" in window) {
         });
 
 }
+updateOnlineStatus(true);
+
+async function checkOnlineUsers() {
+
+    const fiveSecondsAgo =
+        Date.now() - 15000;
+
+    const { data, error } = await supabase
+    .from("status")
+    .select("*");
+
+    if (error || !data) return;
+
+    const otherUser =
+        data.find(u => u.user_name !== myId);
+
+    const statusDiv =
+        document.getElementById("online-status");
+
+    if (!otherUser) {
+        statusDiv.innerText = "offline";
+        return;
+    }
+
+    // REAL online check
+    if (
+        otherUser.online &&
+        otherUser.last_seen > fiveSecondsAgo
+    ) {
+
+        statusDiv.innerText = "online";
+
+    } else {
+
+        const lastSeen =
+            new Date(otherUser.last_seen)
+            .toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit"
+            });
+
+        statusDiv.innerText =
+            `last seen ${lastSeen}`;
+    }
+
+}
+setInterval(() => {
+
+    checkOnlineUsers();
+
+}, 5000);
+onlineInterval = setInterval(() => {
+
+    updateOnlineStatus(true);
+
+}, 15000);
+
+document.addEventListener("visibilitychange", () => {
+
+    if (document.visibilityState === "hidden") {
+
+        updateOnlineStatus(false);
+
+    } else {
+
+        updateOnlineStatus(true);
+
+    }
+
+});
 if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("./sw.js")
+    navigator.serviceWorker.register("/sw.js")
         .then(() => console.log("SW registered"));
 }
 </script>
